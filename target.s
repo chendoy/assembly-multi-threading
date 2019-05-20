@@ -1,0 +1,1 @@
+; target co-rotine, resumed every time a target is destroyed

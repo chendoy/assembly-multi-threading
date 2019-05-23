@@ -35,6 +35,7 @@ section .data
     push STKSIZE
     call malloc
     add esp,4
+    add eax,STKSIZE  ; make the pointer point to the END of the co-routine stack
     mov [ebp-4],eax
     popad
     
@@ -54,6 +55,7 @@ extern sscanf
 extern printGameBoard
 extern schedule
 extern target_func
+extern moveDrone
 
 main:
 
@@ -246,6 +248,40 @@ init_coRotines:
     pushad
     mov [ebx+SPP], esp
     mov esp, [SPT]
+
+    ; init N drones in a "for loop"
+
+    mov ecx, [ebp+8]  ; ecx = N
+
+    .init_drones:
+
+    ALLOC_STACK
+    mov ebx, [COS_ARR]  ; get first co-routine aka printer
+
+    ; adding the current drones offset to ebx
+
+    mov eax, CO_STRUCT_SIZE
+    mov edi, 3
+    mul edi
+    add ebx, eax                    ; ebx = ebx + 3*[STRUCT_SIZE]
+    mov eax, [ebp+8]
+    sub eax,ecx                     ; eax = N - ecx (offset)
+    mov edi, CO_STRUCT_SIZE
+    mul edi              ; eax = (N - ecx) * CO_STRUCT_SIZE
+    add ebx,eax       
+
+    mov dword [ebx+CODEP], moveDrone
+    mov edx, [ebp-4]     ; re-taking allocated co-stack (because mul destroyed it)
+    mov dword [ebx+SPP], edx
+    mov [SPT], esp
+    mov esp, [ebx+SPP]
+    push moveDrone
+    pushfd
+    pushad
+    mov [ebx+SPP], esp
+    mov esp, [SPT]
+
+    loop .init_drones, ecx
 
     popad
     mov esp,ebp

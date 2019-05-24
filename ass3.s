@@ -22,7 +22,8 @@ NUM_HITS     resd 1            ; T - number of hits to win
 PRINT_STEPS  resd 1            ; K - number of steps until printing
 BETA         resd 1            ; β - visibility angle
 DISTANCE     resd 1            ; d - visibility distance of a drone
-SEED         resd 1            ; seed - LFSR's seed
+SEED         resw 1            ; seed - LFSR's seed
+curr_LFSR    resw 1            ; current LFSR's read
 
 
 section .data
@@ -70,6 +71,8 @@ main:
     mov dword [COS_ARR], eax
     pushad
 
+    mov dx,word [SEED]            ; initializing LFSR with SEED
+    mov word [curr_LFSR],dx
 
     push dword [NUMCO]
     call init_coRotines      ; initializes co-routines
@@ -83,6 +86,70 @@ main:
 ; [IN]: coordinates x,y,α of a drone
 ; [OUT]: TRUE if the caller drone may destroy the target, FALSE otherwise 
 ;mayDestroy:
+
+; [IN]: void
+; [OUT]: the next pseudo-random LSFR generated number  
+generateNumber:
+    push ebp
+    mov ebp,esp
+    sub esp,4
+    pushad
+
+    mov esi,0     ; esi is the xoring result
+    mov bx, word [curr_LFSR]
+    mov ecx, 16   ; ecx is the loop counter
+
+    .one_shift:
+
+    mov dx,0
+    test bx, 0000000000000001b ; checks if the 16-th bits is on
+    jz .16_bit_was_not_set
+    mov dx,1
+
+    .16_bit_was_not_set:
+    mov si,dx  ; saving zero flag aside for now
+    mov dx,0
+    test bx, 0000000000000100b ; checks if the 14-th bits is on
+    jz .14_bit_was_not_set
+    mov dx,1
+
+    .14_bit_was_not_set:
+    XOR si,dx
+    mov dx,0
+    test bx, 0000000000001000b ; checks if the 13-th bits is on
+    jz .13_bit_was_not_set
+    mov dx,1
+
+    .13_bit_was_not_set:
+    XOR si,dx
+    mov dx,0
+    test bx, 0000000000100000b ; checks if the 11-th bits is on
+    jz .11_bit_was_not_set
+    mov dx,1
+
+    .11_bit_was_not_set:
+    XOR si,dx
+
+    shr bx,1 ; shifting
+    cmp si,0
+    jz .do_not_set
+    OR bx, 1000000000000000b ; setting input bit to 1
+    .do_not_set:
+
+    loop .one_shift, ecx
+    
+    mov word [curr_LFSR],bx
+    mov [ebp-4], ebx
+
+    ; after loop - return the result in eax
+
+    popad
+    mov eax, [ebp-4]
+    mov esp,ebp
+    pop ebp
+    ret
+
+
 
 
     mov ebx, [ebp+8]  ; ebx = N

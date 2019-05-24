@@ -3,12 +3,16 @@
 section .rodata
 format_input_d: db "%d",0     ; for sscanf
 format_print_d: db "%d",10,0  ; for printf
+format_print_p: db "%p",10,0  ; for printf
+format_print_s: db "%s",10,0  ; for printf
+newLine : db "\n",10,0;
 
 section .bss
 
 CURR        resd 1          ; current co-rotine pointer
 STKSIZE     equ 16*1024     ; drone's stack size - 16kib
 COS_ARR     resd 1          ; pointer to drones struct array
+CORS_PTR_ARR resd 1          ;array of pointers to cor structs
 SPT         resd 1          ; temporary stack pointer
 SPMAIN      resd 1          ; stack pointer of main
 struc CO_i                 ; drone struct
@@ -17,6 +21,7 @@ struc CO_i                 ; drone struct
 endstruc
 
 CO_STRUCT_SIZE equ 8
+CO_PTR_SIZE    equ 4
 NUMCO        resd 1            ; N - # of co-routine
 NUM_HITS     resd 1            ; T - number of hits to win
 PRINT_STEPS  resd 1            ; K - number of steps until printing
@@ -40,6 +45,21 @@ section .data
     mov [ebp-4],eax
     popad
     
+%endmacro
+%macro ptrprint 1
+    pushad
+    push  dword %1
+    push format_print_p
+    call printf
+    add esp,8
+    popad
+    
+    pushad
+    push newLine
+    push format_print_s
+    call printf
+    add esp,8
+    popad
 %endmacro
 
 ; ------- MACROS: END -------
@@ -69,19 +89,58 @@ main:
     call alloc_coRotines     ; allocate co-routines memory
     add esp,4
     mov dword [COS_ARR], eax
-    pushad
+    pushad    ;  why ?
 
     mov dx,word [SEED]            ; initializing LFSR with SEED
     mov word [curr_LFSR],dx
-
+    popad
+    
     push dword [NUMCO]
     call init_coRotines      ; initializes co-routines
     add esp,4
+
+
+
+    push 1                    ; first we start the scheduler co-routine
+    call startCo
+    add esp,4
+
 
     mov     ebx,eax     ; exiting
     mov     eax,1
     int     0x80
 
+startCo:
+
+    mov ebx,[CORS_PTR_ARR]
+    push ebp                  
+    mov ebp,esp                
+    pushad                        ;save registers of main
+    mov [SPMAIN],esp              ;save esp of main
+    mov ebx,[ebp+8]               ; gets ID of  co-routine to activate
+    mov edi,[CORS_PTR_ARR]
+    mov ebx,[ebx*4+edi]  ;get a pointer to co-routine struct
+    jmp .do_resume
+ 
+ .resume: ; save state of current co-routine
+    pushfd
+    pushad
+    mov edx,[CURR]
+    mov [edx+SPP],esp  ;save current esp
+
+
+ .do_resume: ; load esp for resumed co-routine   
+    mov esp,[ebx+SPP] ;esp points now to the co routine stack
+    mov [CURR],ebx    ; CURR points now to the struct of the current co-routine
+    popad              ;restore resumed co-routine state 
+    popfd              ;restore flags
+    ret                ; this will jump to the activated function that serve as "return address"
+ 
+ .endCo:
+    mov esp,[SPMAIN]   ; restore esp of main
+    popad              ; restore registers of main      
+    pop ebp
+    ret
 
 ; [IN]: coordinates x,y,α of a drone
 ; [OUT]: TRUE if the caller drone may destroy the target, FALSE otherwise 
@@ -185,6 +244,14 @@ alloc_coRotines:
     add esp,8
     mov [ebp-4], eax
     popad
+    
+    pushad
+    push ebx
+    push CO_PTR_SIZE
+    call calloc
+    add esp,8
+    mov [CORS_PTR_ARR],eax
+    popad
 
     popad
     mov eax, [ebp-4]
@@ -274,6 +341,8 @@ init_coRotines:
     ALLOC_STACK
     mov edx, [ebp-4]
     mov ebx, [COS_ARR]  ; get first co-routine aka printer
+    mov esi, dword[CORS_PTR_ARR]
+    mov dword [esi],ebx ;save the pointer on the pointer's Array
     mov dword [ebx+CODEP], printGameBoard
     mov dword [ebx+SPP], edx
     mov [SPT], esp
@@ -284,28 +353,40 @@ init_coRotines:
     mov [ebx+SPP], esp
     mov esp, [SPT]
 
+
     ; scheduler init
 
     ALLOC_STACK
     mov edx, [ebp-4]
-    mov ebx, [COS_ARR]  ; get first co-routine aka printer
+    mov ebx, [COS_ARR]  ; get second co-routine scheduler
     add ebx, CO_STRUCT_SIZE
+    mov esi, [CORS_PTR_ARR]
+    mov dword[esi+4],ebx   ;save the pointer on the pointer's Array
+    
     mov dword [ebx+CODEP], schedule
     mov dword [ebx+SPP], edx
-    mov [SPT], esp
+    mov dword[SPT], esp
     mov esp, [ebx+SPP]
     push schedule
     pushfd
     pushad
-    mov [ebx+SPP], esp
-    mov esp, [SPT]
+    mov dword[ebx+SPP], esp
+    mov esp, dword[SPT]
+     
+
 
     ; target init
+
+ 
 
     ALLOC_STACK
     mov edx, [ebp-4]
     mov ebx, [COS_ARR]  ; get first co-routine aka printer
     add ebx,2* CO_STRUCT_SIZE
+    mov esi,dword[CORS_PTR_ARR]
+    mov dword[esi+8],ebx ;save the pointer on the pointer's Array
+ 
+
     mov dword [ebx+CODEP], target_func
     mov dword [ebx+SPP], edx
     mov [SPT], esp
@@ -316,9 +397,12 @@ init_coRotines:
     mov [ebx+SPP], esp
     mov esp, [SPT]
 
+
     ; init N drones in a "for loop"
 
-    mov ecx, [ebp+8]  ; ecx = N
+    mov ebx, [ebp+8]  ; ecx = N
+
+    
 
     .init_drones:
 
@@ -333,10 +417,13 @@ init_coRotines:
     add ebx, eax                    ; ebx = ebx + 3*[STRUCT_SIZE]
     mov eax, [ebp+8]
     sub eax,ecx                     ; eax = N - ecx (offset)
+    mov esi,eax
     mov edi, CO_STRUCT_SIZE
     mul edi              ; eax = (N - ecx) * CO_STRUCT_SIZE
     add ebx,eax       
 
+    mov edi,[CORS_PTR_ARR]
+    mov [edi+(esi*4)],ebx   ;save the pointer on the pointer's Array
     mov dword [ebx+CODEP], moveDrone
     mov edx, [ebp-4]     ; re-taking allocated co-stack (because mul destroyed it)
     mov dword [ebx+SPP], edx
@@ -350,6 +437,8 @@ init_coRotines:
 
     loop .init_drones, ecx
 
+
+ 
     popad
     mov esp,ebp
     pop ebp

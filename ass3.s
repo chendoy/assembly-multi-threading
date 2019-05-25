@@ -1,4 +1,13 @@
 ; main program file
+global NUMCO
+global CURR
+global STKSIZE
+global COS_ARR
+global CORS_PTR_ARR
+global SPT
+global SPMAIN
+global CO_i
+global PRINT_STEPS;
 
 section .rodata
 format_input_d: db "%d",0     ; for sscanf
@@ -29,6 +38,7 @@ BETA         resd 1            ; β - visibility angle
 DISTANCE     resd 1            ; d - visibility distance of a drone
 SEED         resw 1            ; seed - LFSR's seed
 curr_LFSR    resw 1            ; current LFSR's read
+
 
 
 section .data
@@ -65,8 +75,12 @@ section .data
 ; ------- MACROS: END -------
 
 section .text
+
 align 16
 global main
+global startCo
+global startCo.resume;
+global startCo.endCo;
 extern printf
 extern fprintf
 extern malloc
@@ -78,6 +92,7 @@ extern schedule
 extern target_func
 extern moveDrone
 
+
 main:
 
     mov esi, [esp+8]
@@ -85,7 +100,7 @@ main:
     call getArguments
     add esp,4
 
-    push dword [NUMCO]
+    push dword [NUMCO]      
     call alloc_coRotines     ; allocate co-routines memory
     add esp,4
     mov dword [COS_ARR], eax
@@ -99,12 +114,12 @@ main:
     call init_coRotines      ; initializes co-routines
     add esp,4
 
-
-
-    push 1                    ; first we start the scheduler co-routine
+    
+    push 1                    ; first we start the scheduler co-routine 
     call startCo
     add esp,4
 
+                              ; here we are after first round - we need to decide how to proceed.
 
     mov     ebx,eax     ; exiting
     mov     eax,1
@@ -112,7 +127,6 @@ main:
 
 startCo:
 
-    mov ebx,[CORS_PTR_ARR]
     push ebp                  
     mov ebp,esp                
     pushad                        ;save registers of main
@@ -417,13 +431,14 @@ init_coRotines:
     add ebx, eax                    ; ebx = ebx + 3*[STRUCT_SIZE]
     mov eax, [ebp+8]
     sub eax,ecx                     ; eax = N - ecx (offset)
-    mov esi,eax
+    mov esi,eax                     ; save the offset in order to find the co-routine later
     mov edi, CO_STRUCT_SIZE
     mul edi              ; eax = (N - ecx) * CO_STRUCT_SIZE
     add ebx,eax       
 
+ 
     mov edi,[CORS_PTR_ARR]
-    mov [edi+(esi*4)],ebx   ;save the pointer on the pointer's Array
+    mov [edi+12+(esi*4)],ebx   ;save the pointer on the pointer's Array
     mov dword [ebx+CODEP], moveDrone
     mov edx, [ebp-4]     ; re-taking allocated co-stack (because mul destroyed it)
     mov dword [ebx+SPP], edx

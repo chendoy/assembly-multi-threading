@@ -11,8 +11,7 @@ extern COS_ARR
 
 
 section .data
- steps_counter dd 1
-
+ steps_counter dd 0
 
 section .text
 extern startCo.resume
@@ -23,8 +22,8 @@ schedule:
     mov esi,[NUMCO] ;esi=NUMCO
     mov ecx,esi ; 
     .round_robin_schsule: ; looping on the number of the co-routines
+        
 
-      
         mov edx,esi   
         sub edx,ecx    
         add edx,3
@@ -34,20 +33,21 @@ schedule:
         inc dword [steps_counter] ; increment steps
 
         mov eax,[steps_counter]
-        mov ebx, [PRINT_STEPS]
-        cmp eax,ebx  ;checks if need to print now
-        jnz .done ; 
+        mov edi, [PRINT_STEPS]
+        cmp eax,edi  ;checks if need to print now
+        jnz .done 
         
         .printSteps_co:   ; it's time to print
-        mov dword [steps_counter],0  ;init steps counter
+        mov dword [steps_counter],1  ;init steps counter
         mov ebx,[CORS_PTR_ARR] ; ebx holds reference to print coroutine now (its index is 0)
-        mov ebx,[ebx]
-        call startCo.resume  
-
-        
-    .done:
+        call startCo.resume
+       
+    
+        .done:
     loop .round_robin_schsule, ecx
 
    jmp schedule ; one round has ended, start another one
+
+   ;jmp startCo.endCo
 
    

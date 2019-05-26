@@ -8,16 +8,21 @@ global SPT
 global SPMAIN
 global CO_i
 global PRINT_STEPS;
+global TARGET_POS
 
 section .rodata
 format_input_d: db "%d",0     ; for sscanf
 format_print_d: db "%d",10,0  ; for printf
 format_print_p: db "%p",10,0  ; for printf
 format_print_s: db "%s",10,0  ; for printf
+format_print_f: db "%.2f",10,0  ; for printf
 newLine : db "\n",10,0;
+MAX_INT_16: dd 0xffff
 
 section .bss
 
+TARGET_POS resd 2           ; holds the target poisiton (x,y)
+randomized resq 1           ; randomized scaled fp
 CURR        resd 1          ; current co-rotine pointer
 STKSIZE     equ 16*1024     ; drone's stack size - 16kib
 COS_ARR     resd 1          ; pointer to drones struct array
@@ -31,23 +36,23 @@ struc CO_i                  ; drone struct
 endstruc
 
 struc DRONE
-    X:     resd 1
-    Y:     resd 1
-    ALPHA: resd 1
+    X:     resq 1
+    Y:     resq 1
+    ALPHA: resq 1
     SCORE: resd 1
 endstruc
 
 CO_STRUCT_SIZE equ 8
 CO_PTR_SIZE    equ 4
-DRONE_STRUC_SIZE equ 16
+DRONE_STRUC_SIZE equ 28
 NUMCO        resd 1            ; N - # of co-routine
 NUM_HITS     resd 1            ; T - number of hits to win
 PRINT_STEPS  resd 1            ; K - number of steps until printing
-BETA         resd 1            ; β - visibility angle
-DISTANCE     resd 1            ; d - visibility distance of a drone
+BETA         resq 1            ; β - visibility angle
+DISTANCE     resq 1            ; d - visibility distance of a drone
 SEED         resw 1            ; seed - LFSR's seed
 curr_LFSR    resw 1            ; current LFSR's read
-
+offset       resd 1            ;
 
 
 section .data
@@ -123,7 +128,7 @@ main:
     call init_coRotines      ; initializes co-routines
     add esp,4
 
-    
+
     push 1                    ; first we start the scheduler co-routine 
     call startCo
     add esp,4
@@ -157,7 +162,7 @@ startCo:
     mov [CURR],ebx    ; CURR points now to the struct of the current co-routine
     popad              ;restore resumed co-routine state 
     popfd              ;restore flags
-    ret                ; this will jump to the activated function that serve as "return address"
+    ret                ; this will jump to the activated function that serves as "return address"
  
  .endCo:
     mov esp,[SPMAIN]   ; restore esp of main
@@ -231,11 +236,43 @@ generateRandom:
     pop ebp
     ret
 
-; [IN]: two integers, upper and lower bounds
-; [OUT]: generated random scaled to range [lower,upper]
-;generateScaled:
-  ;  pushad
-   ; mov ebp,esp
+; [IN]: two integers, A and B
+; [OUT]: generated random scaled to range [A,B]
+
+;           (B-A)*x
+; f(x) = -------------- + A   
+;            0xffff
+
+generateScaled:
+    push ebp
+    mov ebp,esp
+    sub esp,8
+    pushad
+
+    mov esi, [ebp+8]  ; A
+    mov edi, [ebp+12] ; B
+
+    finit             ; initializes FPU stack
+
+    call generateRandom
+    mov ebx, eax      ; ebx = x (generated random)
+
+    sub edi,esi       ; edi = B - A
+    mov eax, edi      ; eax = B - A
+    mul ebx           ; eax = (B-A)*x
+    mov [ebp-4], eax
+    fild dword [ebp-4]
+    fidiv dword [MAX_INT_16]
+    mov [ebp-4], esi
+    fiadd dword [ebp-4]
+    fstp qword [randomized]          ; eax = fp of ((B-A)*x)/0xffff)
+    
+    
+    popad
+    mov eax, [ebp-4]
+    mov esp,ebp
+    pop ebp
+    ret
 
 
 ; [IN]: number of drones co rotines
@@ -360,18 +397,19 @@ init_coRotines:
 
     ALLOC_STACK
     mov edx, [ebp-4]
-    mov ebx, [COS_ARR]  ; get first co-routine aka printer
-    mov esi, dword[CORS_PTR_ARR]
-    mov dword [esi],ebx ;save the pointer on the pointer's Array
+    mov ebx, [COS_ARR]  ; get second co-routine scheduler
+    mov esi, [CORS_PTR_ARR]
+    mov dword [esi],ebx   ;save the pointer on the pointer's Array
+    
     mov dword [ebx+CODEP], printGameBoard
     mov dword [ebx+SPP], edx
-    mov [SPT], esp
+    mov dword[SPT], esp
     mov esp, [ebx+SPP]
     push printGameBoard
     pushfd
     pushad
-    mov [ebx+SPP], esp
-    mov esp, [SPT]
+    mov dword [ebx+SPP], esp
+    mov esp, dword[SPT]
 
 
     ; scheduler init
@@ -434,6 +472,7 @@ init_coRotines:
     mov eax, [ebp+8]
     sub eax,ecx                     ; eax = N - ecx (offset)
     mov esi,eax                     ; save the offset in order to find the co-routine later
+    mov [offset],esi
     mov edi, CO_STRUCT_SIZE
     mul edi              ; eax = (N - ecx) * CO_STRUCT_SIZE
     add ebx,eax       
@@ -452,9 +491,57 @@ init_coRotines:
     mov [ebx+SPP], esp
     mov esp, [SPT]
 
-    loop .init_drones, ecx
+    .init_drones_states:
+
+    ; initializing the Drone[i] with initial parmeters for (x,y,alpha,scores)
+
+    mov ebx,[DRONES_ARR]
+    mov eax,[offset]  ;ecx holds the number of the drone 0 to n-1
+    mov edx, DRONE_STRUC_SIZE
+    mul edx            ; edx = DRONE_STRUC_SIZE * offset
+    add ebx,eax        ; ebx holds pointer to current drone's struct
 
 
+    push 100 ;x upper upper bound
+    push 0 ;x lower bound 
+    call generateScaled ;[randomized] holds random number at scale
+    add esp,8
+    
+
+    mov esi,dword[randomized+4]
+    mov [ebx+4],esi
+
+    mov esi,dword[randomized]
+    mov [ebx],esi
+
+    push 100 ;y upper upper bound
+    push 0   ;y lower bound 
+    call generateScaled ;[randomized] holds random number at scale
+    add esp,8
+
+    mov esi,dword[randomized+4]
+    mov [ebx+12],esi
+
+    mov esi,dword[randomized]
+    mov [ebx+8],esi
+
+
+    push 360     ;alpha inital angle, upper bound
+    push 0       ;alpha initial angle, lower bound
+    call generateScaled ;[randomized] holds random number at scale
+    add esp,8
+   
+    mov esi,dword[randomized+4]
+    mov [ebx+20],esi
+
+    mov esi,dword[randomized]
+    mov [ebx+16],esi
+
+    mov dword [ebx+24],0  ; initial scores ([ebx+12]) = 0
+
+
+    dec ecx
+    jnz .init_drones
  
     popad
     mov esp,ebp

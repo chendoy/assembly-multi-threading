@@ -11,4 +11,4 @@ section .text
 global target_func
 
 target_func:
-    NOP
+    mov eax,eax

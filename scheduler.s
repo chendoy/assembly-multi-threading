@@ -13,6 +13,7 @@ extern COS_ARR
 section .data
  steps_counter dd 0
 
+
 section .text
 extern startCo.resume
 extern startCo.endCo
@@ -22,32 +23,29 @@ schedule:
     mov esi,[NUMCO] ;esi=NUMCO
     mov ecx,esi ; 
     .round_robin_schsule: ; looping on the number of the co-routines
-        
 
+        mov eax,[steps_counter]
+        mov ebx, [PRINT_STEPS]
+        cmp eax,ebx  ;checks if need to print now
+        jnz .contiune_next_drone ; activate next drone co-routine
+        
+        .printSteps_co:
+        mov dword [steps_counter],0  ;init steps counter
+        mov ebx,[CORS_PTR_ARR] ; ebx holds reference to print coroutine now (its index is 0)
+        mov ebx,[ebx]
+        call startCo.resume   
+
+        .contiune_next_drone:
+        inc dword [steps_counter] ;else inc steps_counter and activate next drone co-routine
         mov edx,esi   
         sub edx,ecx    
         add edx,3
         mov ebx,[CORS_PTR_ARR]
         mov ebx,[ebx+4*edx]; ebx = N-ecx +3
         call startCo.resume
-        inc dword [steps_counter] ; increment steps
 
-        mov eax,[steps_counter]
-        mov edi, [PRINT_STEPS]
-        cmp eax,edi  ;checks if need to print now
-        jnz .done 
         
-        .printSteps_co:   ; it's time to print
-        mov dword [steps_counter],1  ;init steps counter
-        mov ebx,[CORS_PTR_ARR] ; ebx holds reference to print coroutine now (its index is 0)
-        call startCo.resume
-       
-    
-        .done:
     loop .round_robin_schsule, ecx
 
-   jmp schedule ; one round has ended, start another one
-
-   ;jmp startCo.endCo
-
-   
+    jmp schedule         ; one round is done, make another one
+    ;jmp startCo.endCo   ;ending round, resuming main(). should call it from drone ? after winning ?

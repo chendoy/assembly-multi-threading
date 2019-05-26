@@ -21,16 +21,25 @@ section .bss
 CURR        resd 1          ; current co-rotine pointer
 STKSIZE     equ 16*1024     ; drone's stack size - 16kib
 COS_ARR     resd 1          ; pointer to drones struct array
-CORS_PTR_ARR resd 1          ;array of pointers to cor structs
+CORS_PTR_ARR resd 1         ; array of pointers to cor structs
+DRONES_ARR   resd 1         ; array of drone state structs (x,y,α,score)
 SPT         resd 1          ; temporary stack pointer
 SPMAIN      resd 1          ; stack pointer of main
-struc CO_i                 ; drone struct
+struc CO_i                  ; drone struct
     CODEP: resd 1
     SPP:   resd 1
 endstruc
 
+struc DRONE
+    X:     resd 1
+    Y:     resd 1
+    ALPHA: resd 1
+    SCORE: resd 1
+endstruc
+
 CO_STRUCT_SIZE equ 8
 CO_PTR_SIZE    equ 4
+DRONE_STRUC_SIZE equ 16
 NUMCO        resd 1            ; N - # of co-routine
 NUM_HITS     resd 1            ; T - number of hits to win
 PRINT_STEPS  resd 1            ; K - number of steps until printing
@@ -104,11 +113,11 @@ main:
     call alloc_coRotines     ; allocate co-routines memory
     add esp,4
     mov dword [COS_ARR], eax
-    pushad    ;  why ?
+    ;pushad    ;  why ?
 
     mov dx,word [SEED]            ; initializing LFSR with SEED
     mov word [curr_LFSR],dx
-    popad
+    ;popad
     
     push dword [NUMCO]
     call init_coRotines      ; initializes co-routines
@@ -162,7 +171,7 @@ startCo:
 
 ; [IN]: void
 ; [OUT]: the next pseudo-random LSFR generated number  
-generateNumber:
+generateRandom:
     push ebp
     mov ebp,esp
     sub esp,4
@@ -222,24 +231,12 @@ generateNumber:
     pop ebp
     ret
 
+; [IN]: two integers, upper and lower bounds
+; [OUT]: generated random scaled to range [lower,upper]
+;generateScaled:
+  ;  pushad
+   ; mov ebp,esp
 
-
-
-    mov ebx, [ebp+8]  ; ebx = N
-    add ebx,3         ; ebx = N+3
-    pushad
-    push ebx
-    push CO_STRUCT_SIZE
-    call calloc
-    add esp,8
-    mov [ebp-4], eax
-    popad
-
-    popad
-    mov eax, [ebp-4]
-    mov esp, ebp
-    pop ebp
-    ret
 
 ; [IN]: number of drones co rotines
 ; [OUT]: pointer to a co-rotines allocated 
@@ -265,6 +262,15 @@ alloc_coRotines:
     call calloc
     add esp,8
     mov [CORS_PTR_ARR],eax
+    popad
+
+    pushad
+    sub ebx,3 ; set ebx = N
+    push ebx
+    push DRONE_STRUC_SIZE
+    call calloc
+    add esp,8
+    mov [DRONES_ARR], eax
     popad
 
     popad
@@ -391,8 +397,6 @@ init_coRotines:
 
     ; target init
 
- 
-
     ALLOC_STACK
     mov edx, [ebp-4]
     mov ebx, [COS_ARR]  ; get first co-routine aka printer
@@ -415,8 +419,6 @@ init_coRotines:
     ; init N drones in a "for loop"
 
     mov ebx, [ebp+8]  ; ecx = N
-
-    
 
     .init_drones:
 

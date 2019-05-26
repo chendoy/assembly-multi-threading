@@ -27,11 +27,14 @@ schedule:
         ;mov eax,[steps_counter]
         ;mov ebx, [PRINT_STEPS]
         ;cmp eax,ebx  ;checks if need to print now
-        ;jnz .printSteps_co ;activating the print steps co-routine
+        ;jnz .contiune_next_drone ; activate next drone co-routine
         
         ;.printSteps_co:
-        ;mov dword [steps_counter],0  ;init steps counter   
+        ;mov dword [steps_counter],0  ;init steps counter
+        ;mov ebx,[CORS_PTR_ARR] ; ebx holds reference to print coroutine now (its index is 0)
+        ;call startCo.resume   
 
+        .contiune_next_drone:
         inc dword [steps_counter] ;else inc steps_counter and activate next drone co-routine
         mov edx,esi   
         sub edx,ecx    

@@ -3,7 +3,7 @@
 section .rodata
 
 
-target_str_format: db "Target %.2f,%.2f",10,0 ;
+target_str_format: db "TARGET: %.2f,%.2f",10,0 ;
 drone_str_format : db "%d,%.2f,%.2f,%.2f,%d",10,0;
 
 drone_str : db " drone state : " ,10,0;

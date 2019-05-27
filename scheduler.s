@@ -1,8 +1,10 @@
 ; scheduler co-rotine, resumed every step and performs round-robin resuming manner
 
+global currentDrone_index
 section .rodata
 
 section .bss
+currentDrone_index resd 1
 extern NUMCO;
 extern CURR;
 extern PRINT_STEPS
@@ -23,6 +25,10 @@ schedule:
     mov esi,[NUMCO] ;esi=NUMCO
     mov ecx,esi ; 
     .round_robin_schsule: ; looping on the number of the co-routines
+        
+        mov edi,[NUMCO]  ;saving current drone position
+        sub edi,ecx  ; edi = current drone position in drones arr (offset)
+        mov dword[currentDrone_index],edi
 
         mov eax,[steps_counter]
         mov ebx, [PRINT_STEPS]

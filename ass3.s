@@ -11,6 +11,7 @@ global CO_i
 global PRINT_STEPS
 global TARGET_POS
 global DRONES_ARR
+global randomized
 
 section .rodata
 format_input_d: db "%d",0     ; for sscanf
@@ -99,6 +100,7 @@ section .data
 section .text
 
 align 16
+global generateScaled
 global main
 global startCo
 global startCo.resume;

@@ -1,4 +1,5 @@
 ; main program file
+
 global NUMCO
 global CURR
 global STKSIZE
@@ -7,8 +8,9 @@ global CORS_PTR_ARR
 global SPT
 global SPMAIN
 global CO_i
-global PRINT_STEPS;
+global PRINT_STEPS
 global TARGET_POS
+global DRONES_ARR
 
 section .rodata
 format_input_d: db "%d",0     ; for sscanf
@@ -16,13 +18,13 @@ format_print_d: db "%d",10,0  ; for printf
 format_print_p: db "%p",10,0  ; for printf
 format_print_s: db "%s",10,0  ; for printf
 format_print_f: db "%.2f",10,0  ; for printf
+drone_str_format : db "%.2f,%.2f,%.2f,%d",10,0;
 newLine : db "\n",10,0;
 MAX_INT_16: dd 0xffff
 
 
 section .bss
 
-TARGET_POS resd 2           ; holds the target poisiton (x,y)
 randomized resq 1           ; randomized scaled fp
 CURR        resd 1          ; current co-rotine pointer
 STKSIZE     equ 16*1024     ; drone's stack size - 16kib
@@ -43,6 +45,12 @@ struc DRONE
     SCORE: resd 1
 endstruc
 
+TARGET_POS:
+    tar_X: resq 1
+    tar_Y: resq 1
+
+tar_X_offset equ 0
+tar_Y_offset equ 8
 CO_STRUCT_SIZE equ 8
 CO_PTR_SIZE    equ 4
 DRONE_STRUC_SIZE equ 28
@@ -119,11 +127,11 @@ main:
     call alloc_coRotines     ; allocate co-routines memory
     add esp,4
     mov dword [COS_ARR], eax
-    ;pushad    ;  why ?
 
     mov dx,word [SEED]            ; initializing LFSR with SEED
     mov word [curr_LFSR],dx
-    ;popad
+
+    call init_target
     
     push dword [NUMCO]
     call init_coRotines      ; initializes co-routines
@@ -134,7 +142,6 @@ main:
     call startCo
     add esp,4
 
-                              ; here we are after first round - we need to decide how to proceed.
 
     mov     ebx,eax     ; exiting
     mov     eax,1
@@ -247,7 +254,6 @@ generateRandom:
 generateScaled:
     push ebp
     mov ebp,esp
-    sub esp,8
     pushad
 
     mov esi, [ebp+8]  ; A
@@ -270,7 +276,6 @@ generateScaled:
     
     
     popad
-    mov eax, [ebp-4]
     mov esp,ebp
     pop ebp
     ret
@@ -460,6 +465,20 @@ init_coRotines:
     mov ebx, [ebp+8]  ; ecx = N
 
     .init_drones:
+    
+
+    push 100 
+    push 0
+    call generateScaled ;[randomized] holds random number at scale
+    add esp,8
+
+    pushad
+    push dword [randomized+4]
+    push dword [randomized]
+    push format_print_f
+    call printf
+    add esp,12
+    popad
 
     ALLOC_STACK
     mov ebx, [COS_ARR]  ; get first co-routine aka printer
@@ -503,24 +522,31 @@ init_coRotines:
     add ebx,eax        ; ebx holds pointer to current drone's struct
 
 
-    push 100 ;x upper upper bound
-    push 0 ;x lower bound 
+    push 100 
+    push 0
     call generateScaled ;[randomized] holds random number at scale
     add esp,8
-    
 
-    mov esi,dword[randomized+4]
+    ;pushad
+    ;push dword [randomized+4]
+    ;push dword [randomized]
+    ;push format_print_f
+    ;call printf
+    ;add esp,12
+    ;popad
+
+    mov esi, dword [randomized+4]
     mov [ebx+4],esi
 
-    mov esi,dword[randomized]
+    mov esi,dword [randomized]
     mov [ebx],esi
 
-    push 100 ;y upper upper bound
-    push 0   ;y lower bound 
+    push 100 
+    push 0   
     call generateScaled ;[randomized] holds random number at scale
     add esp,8
 
-    mov esi,dword[randomized+4]
+    mov esi,dword [randomized+4]
     mov [ebx+12],esi
 
     mov esi,dword[randomized]
@@ -544,6 +570,48 @@ init_coRotines:
     dec ecx
     jnz .init_drones
  
+    popad
+    mov esp,ebp
+    pop ebp
+    ret
+
+
+; [IN]: void
+; [OUT]: void [initi    pushad
+    push dword [randomized+4]
+    push dword [randomized]
+    push format_print_f
+    call printf
+    add esp,12
+    popad
+init_target:
+    push ebp
+    mov ebp,esp
+    pushad
+
+    push 100 
+    push 0   
+    call generateScaled
+    add esp,8
+
+
+    mov esi, dword [randomized+4]
+    mov [TARGET_POS+tar_X_offset+4], esi
+
+    mov esi, dword [randomized]
+    mov [TARGET_POS+tar_X_offset],esi
+
+    push 100 
+    push 0   
+    call generateScaled ;[randomized] holds random number at scale
+    add esp,8
+
+    mov esi, dword [randomized+4]
+    mov [TARGET_POS+tar_Y_offset+4], esi
+
+    mov esi, dword [randomized]
+    mov [TARGET_POS+tar_Y_offset],esi
+
     popad
     mov esp,ebp
     pop ebp

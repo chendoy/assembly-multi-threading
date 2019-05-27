@@ -15,7 +15,6 @@ global DRONES_ARR
 section .rodata
 format_input_d: db "%d",0     ; for sscanf
 format_print_d: db "%d",10,0  ; for printf
-format_print_p: db "%p",10,0  ; for printf
 format_print_s: db "%s",10,0  ; for printf
 format_print_f: db "%.2f",10,0  ; for printf
 drone_str_format : db "%.2f,%.2f,%.2f,%d",10,0;
@@ -25,7 +24,7 @@ MAX_INT_16: dd 0xffff
 
 section .bss
 
-randomized resq 1           ; randomized scaled fp
+randomized resq 1           ; randomized scaled FP
 CURR        resd 1          ; current co-rotine pointer
 STKSIZE     equ 16*1024     ; drone's stack size - 16kib
 COS_ARR     resd 1          ; pointer to drones struct array
@@ -136,7 +135,6 @@ main:
     push dword [NUMCO]
     call init_coRotines      ; initializes co-routines
     add esp,4
-
 
     push 1                    ; first we start the scheduler co-routine 
     call startCo
@@ -437,8 +435,6 @@ init_coRotines:
     mov dword[ebx+SPP], esp
     mov esp, dword[SPT]
      
-
-
     ; target init
 
     ALLOC_STACK
@@ -465,20 +461,6 @@ init_coRotines:
     mov ebx, [ebp+8]  ; ecx = N
 
     .init_drones:
-    
-
-    push 100 
-    push 0
-    call generateScaled ;[randomized] holds random number at scale
-    add esp,8
-
-    pushad
-    push dword [randomized+4]
-    push dword [randomized]
-    push format_print_f
-    call printf
-    add esp,12
-    popad
 
     ALLOC_STACK
     mov ebx, [COS_ARR]  ; get first co-routine aka printer
@@ -521,19 +503,14 @@ init_coRotines:
     mul edx            ; edx = DRONE_STRUC_SIZE * offset
     add ebx,eax        ; ebx holds pointer to current drone's struct
 
-
-    push 100 
-    push 0
-    call generateScaled ;[randomized] holds random number at scale
+    pushad
+    mov eax, 100
+    mov ebx, 0
+    push eax
+    push ebx
+    call generateScaled
     add esp,8
-
-    ;pushad
-    ;push dword [randomized+4]
-    ;push dword [randomized]
-    ;push format_print_f
-    ;call printf
-    ;add esp,12
-    ;popad
+    popad
 
     mov esi, dword [randomized+4]
     mov [ebx+4],esi
@@ -541,10 +518,14 @@ init_coRotines:
     mov esi,dword [randomized]
     mov [ebx],esi
 
-    push 100 
-    push 0   
-    call generateScaled ;[randomized] holds random number at scale
+    pushad
+    mov eax, 100
+    mov ebx, 0
+    push eax
+    push ebx
+    call generateScaled
     add esp,8
+    popad
 
     mov esi,dword [randomized+4]
     mov [ebx+12],esi
@@ -553,10 +534,14 @@ init_coRotines:
     mov [ebx+8],esi
 
 
-    push 360     ;alpha inital angle, upper bound
-    push 0       ;alpha initial angle, lower bound
+    pushad
+    mov eax, 360
+    mov ebx, 0
+    push eax
+    push ebx
     call generateScaled ;[randomized] holds random number at scale
     add esp,8
+    popad
    
     mov esi,dword[randomized+4]
     mov [ebx+20],esi
@@ -576,14 +561,6 @@ init_coRotines:
     ret
 
 
-; [IN]: void
-; [OUT]: void [initi    pushad
-    push dword [randomized+4]
-    push dword [randomized]
-    push format_print_f
-    call printf
-    add esp,12
-    popad
 init_target:
     push ebp
     mov ebp,esp

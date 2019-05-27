@@ -56,7 +56,7 @@ section .data
 
     push drone_str_format
     call printf
-    add esp,32
+    add esp,36
     popad
 %endmacro
 

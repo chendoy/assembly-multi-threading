@@ -30,7 +30,7 @@ moveDrone:
     ; calculating ∆α and ∆d
 
     mov eax,60
-    mov ebx,0
+    mov ebx,-60
     push eax
     push ebx
     call generateScaled

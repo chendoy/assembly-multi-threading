@@ -9,6 +9,7 @@ global moveDrone
 
 section .rodata
 format_print_f: db "%.2f",10,0  ; for printf
+format_print_e: db "%e",10,0  ; for printf
 
 section .bss
 extern currentDrone_index
@@ -23,11 +24,13 @@ delta_distance resq 1           ; reserved for ∆d
 section .text
 extern printf
 extern generateScaled
+extern generateRandom
 moveDrone:
     ;saves the angle 360 label (in qword)
     mov dword[angle_360],360
 
     ; calculating ∆α and ∆d
+
 
     mov eax,60
     mov ebx,-60
@@ -35,20 +38,20 @@ moveDrone:
     push ebx
     call generateScaled
     add esp,8
-    
-    mov esi, dword [randomized+4]
-    mov [delta_alpha+4], esi
-
-    mov esi, dword [randomized]
-    mov [delta_alpha],esi
 
     pushad
-    push dword [delta_alpha+4]
-    push dword [delta_alpha]
+    push dword [randomized+4]
+    push dword [randomized]
     push format_print_f
     call printf
     add esp, 12
     popad
+
+    mov esi, [randomized+4]
+    mov [delta_alpha+4], esi
+
+    mov esi, [randomized]
+    mov [delta_alpha],esi
 
     mov eax,50
     mov ebx,0

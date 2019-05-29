@@ -18,6 +18,7 @@ format_input_d: db "%d",0     ; for sscanf
 format_print_d: db "%d",10,0  ; for printf
 format_print_s: db "%s",10,0  ; for printf
 format_print_f: db "%.2f",10,0  ; for printf
+format_print_g: db "%g",10,0  ; for printf
 drone_str_format : db "%.2f,%.2f,%.2f,%d",10,0;
 newLine : db "\n",10,0;
 MAX_INT_16: dd 0xffff
@@ -101,6 +102,7 @@ section .text
 
 align 16
 global generateScaled
+global generateRandom
 global main
 global startCo
 global startCo.resume;
@@ -137,7 +139,6 @@ main:
     push dword [NUMCO]
     call init_coRotines      ; initializes co-routines
     add esp,4
-
 
     push 1                    ; first we start the scheduler co-routine 
     call startCo
@@ -264,17 +265,19 @@ generateScaled:
 
     call generateRandom
     mov ebx, eax      ; ebx = x (generated random)
-
+    cmp ebx,0
+    jg .do_not_neg
+    neg ebx
+    .do_not_neg:
     sub edi,esi       ; edi = B - A
-    mov eax, edi      ; eax = B - A
-    mul ebx           ; eax = (B-A)*x
-    mov [ebp-4], eax
+    mov [ebp-4], edi  ; [ebp-4] = B - A
     fild dword [ebp-4]
+    mov [ebp-4], ebx
+    fimul dword [ebp-4]
     fidiv dword [MAX_INT_16]
     mov [ebp-4], esi
     fiadd dword [ebp-4]
     fstp qword [randomized]          ; eax = fp of ((B-A)*x)/0xffff)
-    
     
     popad
     mov esp,ebp

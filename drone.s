@@ -39,14 +39,6 @@ moveDrone:
     call generateScaled
     add esp,8
 
-    pushad
-    push dword [randomized+4]
-    push dword [randomized]
-    push format_print_f
-    call printf
-    add esp, 12
-    popad
-
     mov esi, [randomized+4]
     mov [delta_alpha+4], esi
 
@@ -82,9 +74,11 @@ moveDrone:
     
     ; drone(α) = curr(α) + ∆α
 
-    fild qword [curr_alpha]
+    .debug:
+
+    fld qword [curr_alpha]
     fadd qword [delta_alpha]
-    fstp qword [ebx+16]
+    fstp qword [ebx+16]      ; extracting from x87 to the right offset of the drone
 
 
     mov eax,dword[ebx+16]

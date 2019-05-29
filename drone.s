@@ -16,7 +16,7 @@ extern currentDrone_index
 DRONE_STRUC_SIZE equ 28
 curr_alpha resq 1
 drone_ptr resd 1
-angle_360 resq 1
+angle_360 resd 1
 
 delta_alpha    resq 1           ; reserved for ∆α
 delta_distance resq 1           ; reserved for ∆d
@@ -27,7 +27,7 @@ extern generateScaled
 extern generateRandom
 moveDrone:
     ;saves the angle 360 label (in qword)
-    mov dword[angle_360],360
+    mov dword [angle_360],360
 
     ; calculating ∆α and ∆d
 
@@ -74,27 +74,37 @@ moveDrone:
     
     ; drone(α) = curr(α) + ∆α
 
-    .debug:
-
     fld qword [curr_alpha]
     fadd qword [delta_alpha]
     fstp qword [ebx+16]      ; extracting from x87 to the right offset of the drone
 
+    fild dword [angle_360] ; st1
+    fld qword [ebx+16]     ; st0
+    fcomi
+    ja .wraparound
 
-    mov eax,dword[ebx+16]
-    mov edx,dword[angle_360]
-    cmp eax,edx
-    jg .wraparounding
+    fldz                   ; st1
+    fld qword [ebx+16]     ; st0
+    fcomi
+    jb .negative_angel
+
     jmp .continue
     
-    .wraparounding:  ; wraparounding α if needed
-    fild qword [ebx+16]
-    fsub qword [angle_360]
+    .wraparound:  ; wraparounding α if needed
+    fild dword [angle_360]
+    fld qword [ebx+16]
+    fprem
+    fstp qword [ebx+16]
+
+    jmp .continue
+
+    .negative_angel:
+    fild dword [angle_360] ; st1
+    fld qword [ebx+16]     ; st0
+    fadd
     fstp qword [ebx+16]
 
     .continue:
-
-
 
     ;this code should be at the end of the function, it will resume the scheduler
     mov edi,[CORS_PTR_ARR]

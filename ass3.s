@@ -96,6 +96,18 @@ section .data
     popad
 %endmacro
 
+%macro print_qword_macro 1
+
+    pushad
+    push dword [%1+4]
+    push dword [%1]
+    push format_print_f
+    call printf
+    add esp,12
+    popad
+
+%endmacro
+
 ; ------- MACROS: END -------
 
 section .text
@@ -110,7 +122,7 @@ global startCo.endCo;
 extern printf
 extern fprintf
 extern malloc
-extern calloc ; CAN USE OR NOT??
+extern calloc
 extern free
 extern sscanf
 extern printGameBoard
@@ -144,6 +156,7 @@ main:
     call startCo
     add esp,4
 
+    call freeMem
 
     mov     ebx,eax     ; exiting
     mov     eax,1
@@ -278,7 +291,7 @@ generateScaled:
     mov [ebp-4], esi
     fiadd dword [ebp-4]
     fstp qword [randomized]          ; eax = fp of ((B-A)*x)/0xffff)
-    
+
     popad
     mov esp,ebp
     pop ebp
@@ -594,6 +607,36 @@ init_target:
 
     mov esi, dword [randomized]
     mov [TARGET_POS+tar_Y_offset],esi
+
+    popad
+    mov esp,ebp
+    pop ebp
+    ret
+
+freeMem:
+    push ebp
+    mov ebp,esp
+    pushad
+
+    mov ebx, [CORS_PTR_ARR]
+    mov ebx, [ebx]
+    add ebx,4
+    ;mov ebx, [ebx]
+    push ebx
+    call free
+    add esp,4
+
+    push dword [DRONES_ARR]
+    call free
+    add esp,4
+
+    push dword [CORS_PTR_ARR]
+    call free
+    add esp,4
+
+    push dword [COS_ARR]
+    call free
+    add esp,4
 
     popad
     mov esp,ebp

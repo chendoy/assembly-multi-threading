@@ -55,7 +55,6 @@ moveDrone:
 
     ; calculating ∆α and ∆d
 
-
     mov eax,60
     mov ebx,-60
     push eax
@@ -97,7 +96,6 @@ moveDrone:
     mov dword[curr_alpha],edx
 
     .debug:
-    
     ; drone(α) = curr(α) + ∆α
 
     fld qword [curr_alpha]
@@ -107,13 +105,15 @@ moveDrone:
     fild dword [angle_360] ; st1
     fld qword [ebx+16]     ; st0
     fcomi
-    fstp
+    fstp st0
+    fstp st0
     ja .wraparound
 
     fldz                   ; st1
     fld qword [ebx+16]     ; st0
     fcomi
-    fstp
+    fstp st0
+    fstp st0
     jb .negative_angle
 
     jmp .alpha_updated
@@ -122,6 +122,8 @@ moveDrone:
     fild dword [angle_360]
     fld qword [ebx+16]
     fprem
+    fstp st0
+    fstp st0
     fstp qword [ebx+16]
 
     jmp .alpha_updated
@@ -129,7 +131,7 @@ moveDrone:
     .negative_angle:
     fild dword [angle_360] ; st1
     fld qword [ebx+16]     ; st0
-    fadd
+    faddp
     fstp qword [ebx+16]
 
     .alpha_updated:
@@ -162,31 +164,32 @@ moveDrone:
 
     fld qword [delta_x]
     fld qword [ebx]
-    fadd
+    faddp
     fstp qword [ebx]
 
     ; y' = y + ∆y
 
     fld qword [delta_y]
     fld qword [ebx+8]
-    fadd
+    faddp
     fstp qword [ebx+8]
 
     .corners_wrapping:
-
-    finit
 
     ; x wrapping
 
     fild dword [one_hundred] ; st1
     fld qword [ebx]          ; st0
-    fcomiq
-    fstp
+    fcomi
+    fstp st0
+    fstp st0
     ja .above_hundrend_x
 
     fldz                ; st1
     fld qword [ebx]     ; st0
     fcomi
+    fstp st0
+    fstp st0
     jb .below_zero_x
 
     jmp .x_updated
@@ -197,6 +200,7 @@ moveDrone:
     fld qword [ebx]
     fprem
     fstp qword [ebx]
+    fstp st0
     jmp .x_updated
 
     .below_zero_x:
@@ -213,16 +217,18 @@ moveDrone:
     fild dword [one_hundred] ; st1
     fld qword [ebx+8]     ; st0
     fcomi
+    fstp st0
+    fstp st0
     ja .above_hundrend_y
 
     fldz                   ; st1
     fld qword [ebx+8]      ; st0
     fcomi
-    fstp
-    ;fstp
+    fstp st0
+    fstp st0
     jb .below_zero_y
 
-    jmp .x_updated
+    jmp .y_updated
 
     .above_hundrend_y:
 
@@ -230,8 +236,9 @@ moveDrone:
     fld qword [ebx+8]
     fprem
     fstp qword [ebx+8]
-    fstp
-    jmp .x_updated
+    fstp st0
+
+    jmp .y_updated
 
     .below_zero_y:
     fild dword [one_hundred]  ; st1
@@ -260,7 +267,6 @@ toRadians:
     fild qword [degrees_180]
     fdivp
     fstp qword [alpha_rad]
-    fstp
 
     popad
     mov esp,ebp

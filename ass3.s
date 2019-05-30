@@ -144,6 +144,8 @@ main:
     call getArguments
     add esp,4
 
+    finit             ; initializes FPU stack
+
     push dword [NUMCO]      
     call alloc_coRotines     ; allocate co-routines memory
     add esp,4
@@ -279,8 +281,6 @@ generateScaled:
 
     mov esi, [ebp+8]  ; A
     mov edi, [ebp+12] ; B
-
-    finit             ; initializes FPU stack
 
     call generateRandom
     mov ebx, eax      ; ebx = x (generated random)

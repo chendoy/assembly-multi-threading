@@ -11,7 +11,7 @@ section .rodata
 format_print_f: db "%.2f",10,0  ; for printf
 format_print_e: db "%e",10,0  ; for printf
 format_print_d: db "%d",10,0  ; for printf
-drone_winning_str : db "Drone id <%d>: I am a winner",10,0;
+drone_winning_str : db "Drone id %d: I am a winner",10,0;
 
 section .bss
 drone_X_offset equ 0
@@ -78,10 +78,10 @@ extern init_target
 extern createTarget
 
 moveDrone:
-    ; initializing constants
-
+    
     finit
 
+    ; initializing constants
     mov dword [angle_360],360
     mov dword [degrees_180],180
     mov dword [one_hundred],100
@@ -138,7 +138,6 @@ moveDrone:
     fild dword [angle_360] ; st1
     fld qword [ebx+16]     ; st0
     fcomi
-    fstp st0
     fstp st0
     ja .wraparound
 
@@ -347,7 +346,8 @@ toRadians:
     pop ebp
     ret
 
-    mayDestroy:
+mayDestroy:
+    finit
     push ebp                  
     mov ebp,esp
     sub esp,4 ; [ebp-4]=0 => can't destory , [ebp-4]=1 => can destroy
@@ -380,9 +380,9 @@ toRadians:
     ;checking conditions 
     .check_1st_Cond:                                      ;abs(alpha-gamma) < beta) ?
     mov ebx,[drone_ptr] 
-    fld qword [ebx+drone_Alpha_offset]                    ;ST(0)=Alpha
-    ;fld qword [angle_gamma]                              ;ST(0)=gamma
-    fsubp                                                 ;ST(0) = alpha-gamma
+    fld qword [ebx+drone_Alpha_offset]                    ; ST(0)=Alpha
+    ;fld qword [angle_gamma]                              ; ST(0)=gamma
+    fsubp                                                 ; ST(0) = alpha-gamma
     fabs                                                  ; ST(1) = ABS(alpha-gamma)
     fild qword[BETA]                                      ; ST(0) = BETA 
     fcomip                                                ; comapring 
@@ -393,7 +393,7 @@ toRadians:
     FSTP ST0
     FSTP ST0
     FSTP ST0
-    jmp .end_function ;condition failed
+    jmp .end_function                                     ;condition failed
 
     .check_2nd_Cond:            ; sqrt((y2-y1)^2+(x2-x1)^2) < d
      fld qword [Y_differnce]    ; ST(1) = (Y2-Y1)

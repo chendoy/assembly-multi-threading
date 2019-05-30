@@ -599,7 +599,6 @@ init_target:
     call generateScaled
     add esp,8
 
-
     mov esi, dword [randomized+4]
     mov [TARGET_POS+tar_X_offset+4], esi
 

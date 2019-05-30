@@ -278,6 +278,7 @@ moveDrone:
     faddp
     fstp qword [ebx+8]
 
+    .y_updated:
    
     call mayDestroy ; if eax=1 then can destory ,eax=0 can't destroy
         cmp eax,0
@@ -317,7 +318,6 @@ moveDrone:
              ret                ; this will jump to the activated function that serves as "return address"
 
 
-    .y_updated:
 
     .end_fucntion1:
 

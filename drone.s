@@ -172,13 +172,15 @@ moveDrone:
     fadd
     fstp qword [ebx+8]
 
-    .coreners_wrapping:
+    .corners_wrapping:
+
+    finit
 
     ; x wrapping
 
     fild dword [one_hundred] ; st1
     fld qword [ebx]          ; st0
-    fcomi
+    fcomiq
     fstp
     ja .above_hundrend_x
 
@@ -217,7 +219,7 @@ moveDrone:
     fld qword [ebx+8]      ; st0
     fcomi
     fstp
-    fstp
+    ;fstp
     jb .below_zero_y
 
     jmp .x_updated

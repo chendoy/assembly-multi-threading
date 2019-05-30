@@ -53,5 +53,5 @@ schedule:
         
     loop .round_robin_schsule, ecx
 
-    ;jmp schedule         ; one round is done, make another one
-    jmp startCo.endCo   ;ending round, resuming main(). should call it from drone ? after winning ?
+    jmp schedule         ; one round is done, make another one
+    ;jmp startCo.endCo   ;ending round, resuming main(). should call it from drone ? after winning ?

@@ -10,8 +10,16 @@ global moveDrone
 section .rodata
 format_print_f: db "%.2f",10,0  ; for printf
 format_print_e: db "%e",10,0  ; for printf
+format_print_d: db "%d",10,0  ; for printf
+drone_winning_str : db "Drone id <%d>: I am a winner",10,0;
 
 section .bss
+drone_X_offset equ 0
+drone_Y_offset equ 8
+drone_Alpha_offset equ 16
+drone_Score_offset equ 24
+target_X_offset equ 0
+target_Y_offset equ 8
 extern currentDrone_index
 DRONE_STRUC_SIZE equ 28
 curr_alpha     resq 1
@@ -24,9 +32,28 @@ delta_y        resq 1           ; reserved for ∆y
 degrees_180    resq 1           ; reserved for 180 degrees constant
 alpha_rad      resq 1           ; reserved for α conversion to radians
 one_hundred    resd 1           ; reserved for 100 constant
+extern TARGET_POS ; (X2,Y2)
+angle_gamma resq 1
+Y_differnce resq 1
+X_differnce resq 1
+extern BETA
+extern DISTANCE
+extern NUM_HITS
+SPP equ 4
 
 section .data
 ; ------- MACROS: START -------
+
+%macro printWinnerDrone 0
+    pushad
+    mov esi,dword[currentDrone_index]
+    add esi,1
+    push esi
+    push drone_winning_str
+    call printf
+    add esp,8
+    popad
+%endmacro
 
 %macro print_qword_macro 1
 
@@ -46,8 +73,14 @@ section .text
 extern printf
 extern generateScaled
 extern generateRandom
+extern startCo.endCo
+extern init_target
+extern createTarget
+
 moveDrone:
     ; initializing constants
+
+    finit
 
     mov dword [angle_360],360
     mov dword [degrees_180],180
@@ -246,7 +279,48 @@ moveDrone:
     faddp
     fstp qword [ebx+8]
 
+   
+    call mayDestroy ; if eax=1 then can destory ,eax=0 can't destroy
+        cmp eax,0
+        jnz .destroy_target
+        jmp .do_not_destroy
+        
+    .do_not_destroy:
+        jmp .end_fucntion1
+            
+    .destroy_target:                        ; destory the target
+      mov ebx,[drone_ptr]                   ;increse drone's scores
+      mov esi,dword [ebx+drone_Score_offset]
+      add esi,1 ; esi =  new drone's score
+      mov dword [ebx+drone_Score_offset],esi
+      mov edi,[NUM_HITS]                    ; edi = NUM_HITS
+        cmp esi,edi                         ; cmp drone's scores >= NUM_HITS?
+        jge .droneWin_endGame 
+        jmp .resume_targetCoroutine 
+      
+        .droneWin_endGame:
+            printWinnerDrone
+            call startCo.endCo; end the game retuning to main
+
+        .resume_targetCoroutine:
+            push moveDrone
+            pushfd
+            pushad
+            mov edx,[CURR]
+            mov [edx+SPP],esp  ;save current esp of drone
+            .do_resume_target:
+             mov ebx,[CORS_PTR_ARR] 
+             mov ebx,[ebx+8] ; target co- routine ptr
+             mov esp,[ebx+SPP]  ;esp points now to the co routine stack
+             mov [CURR],ebx     ;CURR points now to the struct of the current co-routine
+             popad              ;restore resumed co-routine state 
+             popfd              ;restore flags
+             ret                ; this will jump to the activated function that serves as "return address"
+
+
     .y_updated:
+
+    .end_fucntion1:
 
     ;this code should be at the end of the function, it will resume the scheduler
     mov edi,[CORS_PTR_ARR]
@@ -261,8 +335,8 @@ toRadians:
     mov ebp,esp
     pushad
 
-    fld qword [ebp+8]  ; load α
-    fldpi              ; load pi
+    fld qword [ebp+8]   ; load α
+    fldpi               ; load pi
     fmulp
     fild qword [degrees_180]
     fdivp
@@ -273,4 +347,82 @@ toRadians:
     pop ebp
     ret
 
+    mayDestroy:
+    push ebp                  
+    mov ebp,esp
+    sub esp,4 ; [ebp-4]=0 => can't destory , [ebp-4]=1 => can destroy
+    pushad
+    mov dword[ebp-4],0 ;  default = can't destroy
+
+ ;<< gamma = arctan2(y2-y1, x2-x1) >>
     
+    mov ebx,[drone_ptr]
+    fld qword [ebx+drone_Y_offset]                  ; ST(1)=Y1 (drone's Y)  
+    fld qword [TARGET_POS+target_Y_offset]          ; ST(0)=Y2 (Target Y)
+    fsubp                                           ; ST(0)=Y2-Y1
+    fst qword [Y_differnce]                         ; Y_differnce= Y2-Y1
+
+    fld qword [TARGET_POS+target_X_offset]          ; ST(1)=X2 (Target X)
+    mov ebx,[drone_ptr]
+    fld qword [ebx+drone_X_offset]                  ; ST(0)=X1 (drone's X)  
+    fsubp                                           ; ST(0)=X2-X1, ST(1)=Y2-Y1
+    fst qword [X_differnce]                         ; X_differnce= X2-X1
+    
+
+    fpatan ; ST(1)=Arctan(y2-y1,x2-x1) 
+    ;converting the reuslt to degrees from radians ST(1)=pi
+    fldpi  ; ST(0)= pi (for converting to degrees)
+    fdivp ; ST(0) = Arctan(y2-y1,x2-x1)\pi
+    fild qword [degrees_180] ; ST(1)= 180 deg
+    fmulp ;ST(0)= Arctan(y2-y1,x2-x1)\pi *180 = ANGLE_GAMMA
+    fst qword [angle_gamma]
+
+    ;checking conditions 
+    .check_1st_Cond:                                      ;abs(alpha-gamma) < beta) ?
+    mov ebx,[drone_ptr] 
+    fld qword [ebx+drone_Alpha_offset]                    ;ST(0)=Alpha
+    ;fld qword [angle_gamma]                              ;ST(0)=gamma
+    fsubp                                                 ;ST(0) = alpha-gamma
+    fabs                                                  ; ST(1) = ABS(alpha-gamma)
+    fild qword[BETA]                                      ; ST(0) = BETA 
+    fcomip                                                ; comapring 
+    ja .check_2nd_Cond
+    ;free stack
+    FSTP ST0
+    FSTP ST0
+    FSTP ST0
+    FSTP ST0
+    FSTP ST0
+    jmp .end_function ;condition failed
+
+    .check_2nd_Cond:            ; sqrt((y2-y1)^2+(x2-x1)^2) < d
+     fld qword [Y_differnce]    ; ST(1) = (Y2-Y1)
+     fld qword [Y_differnce]    ; ST(0) = (Y2-Y1)
+     FMULP ; ST(1)=(Y2-Y1)^2
+     fld qword[X_differnce]     ; ST(0)=(X2-X1)
+     fld qword[X_differnce]     ; ST(1)=(X2-X1)
+     FMULP                      ; ST(0)=(X2-X1)^2
+     faddP                      ; ST(0)=(Y2-Y1)^2 + (X2-X1)^2
+
+     fsqrt ; ST(1)= SQRT ((Y2-Y1)^2 + (X2-X1)^2)
+     fild qword [DISTANCE]      ; ST(0)= d
+     fcomip 
+     ja .can_destory            ; if both conditions implmented, then can destory target
+     jmp .end_function
+     .can_destory: 
+        mov dword[ebp-4],1
+    ;free stack
+    FSTP ST0
+    FSTP ST0
+    FSTP ST0
+    FSTP ST0
+    FSTP ST0
+    FSTP ST0
+
+    .end_function:
+    popad
+    mov eax, [ebp-4]
+    mov esp,ebp
+    pop ebp
+    ret
+

@@ -12,13 +12,18 @@ global PRINT_STEPS
 global TARGET_POS
 global DRONES_ARR
 global randomized
+global BETA
+global DISTANCE
+global NUM_HITS
+
 
 section .rodata
-format_input_d: db "%d",0     ; for sscanf
-format_print_d: db "%d",10,0  ; for printf
-format_print_s: db "%s",10,0  ; for printf
+format_input_d: db "%d",0       ; for sscanf
+format_print_d: db "%d",10,0    ; for printf
+format_print_s: db "%s",10,0    ; for printf
+format_input_f: db "%lf",0     ; for sscanf
 format_print_f: db "%.2f",10,0  ; for printf
-format_print_g: db "%g",10,0  ; for printf
+format_print_p: db "%p",10,0  ; for printf
 drone_str_format : db "%.2f,%.2f,%.2f,%d",10,0;
 newLine : db "\n",10,0;
 MAX_INT_16: dd 0xffff
@@ -129,7 +134,8 @@ extern printGameBoard
 extern schedule
 extern target_func
 extern moveDrone
-
+global init_target
+extern createTarget
 
 main:
 
@@ -322,6 +328,7 @@ alloc_coRotines:
     call calloc
     add esp,8
     mov [CORS_PTR_ARR],eax
+
     popad
 
     pushad
@@ -376,16 +383,16 @@ getArguments:
     mov dword ebx, [esi+16]
 
     push BETA
-    push format_input_d
+    push format_input_f
     push ebx
-
     call sscanf
     add esp,12
+
 
     mov dword ebx, [esi+20]
 
     push DISTANCE
-    push format_input_d
+    push format_input_f
     push ebx
     call sscanf
     add esp,12
@@ -464,11 +471,11 @@ init_coRotines:
     mov dword[esi+8],ebx ;save the pointer on the pointer's Array
  
 
-    mov dword [ebx+CODEP], target_func
+    mov dword [ebx+CODEP], createTarget
     mov dword [ebx+SPP], edx
     mov [SPT], esp
     mov esp, [ebx+SPP]
-    push target_func
+    push createTarget
     pushfd
     pushad
     mov [ebx+SPP], esp
@@ -585,8 +592,10 @@ init_target:
     mov ebp,esp
     pushad
 
-    push 100 
-    push 0   
+    mov eax,100
+    mov ebx,0
+    push eax 
+    push ebx   
     call generateScaled
     add esp,8
 
@@ -597,9 +606,11 @@ init_target:
     mov esi, dword [randomized]
     mov [TARGET_POS+tar_X_offset],esi
 
-    push 100 
-    push 0   
-    call generateScaled ;[randomized] holds random number at scale
+    mov eax,100
+    mov ebx,0
+    push eax 
+    push ebx   
+    call generateScaled
     add esp,8
 
     mov esi, dword [randomized+4]
@@ -618,13 +629,14 @@ freeMem:
     mov ebp,esp
     pushad
 
-    mov ebx, [CORS_PTR_ARR]
-    mov ebx, [ebx]
-    add ebx,4
-    ;mov ebx, [ebx]
-    push ebx
-    call free
-    add esp,4
+    ;mov ebx, [CORS_PTR_ARR]  ; now ebx is the start of the co-pointers array
+    ;mov ebx,[ebx]            ; now ebx holds the start of the i-th co-routine
+    ;add ebx,4                ; now ebx hold the pointer to the co-routine stack
+    ;mov ebx,[ebx]
+    ;sub ebx,8
+    ;push ebx
+    ;call free
+    ;add esp,4
 
     push dword [DRONES_ARR]
     call free

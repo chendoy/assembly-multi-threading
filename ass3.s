@@ -69,21 +69,25 @@ SEED         resw 1            ; seed - LFSR's seed
 curr_LFSR    resw 1            ; current LFSR's read
 offset       resd 1            ;
 neg_flag     resd 1            ; tells whether the generated random was negative or not
+STK_PTR_ARR resd 1;
 
 section .data
-
+ cur_Number dd 2;
 ; ------- MACROS: START -------
 
 ; [ebp-4] must be available for this macro
-%macro ALLOC_STACK 0
+%macro ALLOC_STACK 1
+    mov dword[ebp-4],%1
     pushad
     push STKSIZE
     call malloc
+    mov edx,[STK_PTR_ARR]
     add esp,4
+    mov esi,[ebp-4]
+    mov [edx+4*esi],eax
     add eax,STKSIZE  ; make the pointer point to the END of the co-routine stack
     mov [ebp-4],eax
-    popad
-    
+    popad 
 %endmacro
 %macro ptrprint 1
     pushad
@@ -155,6 +159,16 @@ main:
     mov word [curr_LFSR],dx
 
     call init_target
+
+     
+    pushad
+    mov eax,[NUMCO]
+    add eax,3
+    push eax
+    call malloc
+    mov [STK_PTR_ARR],eax
+    add esp,4
+    popad
     
     push dword [NUMCO]
     call init_coRotines      ; initializes co-routines
@@ -432,7 +446,7 @@ init_coRotines:
 
     ; printer init
 
-    ALLOC_STACK
+    ALLOC_STACK 0
     mov edx, [ebp-4]
     mov ebx, [COS_ARR]  ; get second co-routine scheduler
     mov esi, [CORS_PTR_ARR]
@@ -451,7 +465,7 @@ init_coRotines:
 
     ; scheduler init
 
-    ALLOC_STACK
+    ALLOC_STACK 1
     mov edx, [ebp-4]
     mov ebx, [COS_ARR]  ; get second co-routine scheduler
     add ebx, CO_STRUCT_SIZE
@@ -470,7 +484,7 @@ init_coRotines:
      
     ; target init
 
-    ALLOC_STACK
+    ALLOC_STACK 2
     mov edx, [ebp-4]
     mov ebx, [COS_ARR]  ; get first co-routine aka printer
     add ebx,2* CO_STRUCT_SIZE
@@ -494,8 +508,10 @@ init_coRotines:
     mov ebx, [ebp+8]  ; ecx = N
 
     .init_drones:
-
-    ALLOC_STACK
+    mov esi,[cur_Number]
+    add esi,1
+    mov [cur_Number],esi
+    ALLOC_STACK dword esi
     mov ebx, [COS_ARR]  ; get first co-routine aka printer
 
     ; adding the current drones offset to ebx
@@ -634,16 +650,44 @@ freeMem:
     push ebp
     mov ebp,esp
     pushad
+    
+    mov edx,[STK_PTR_ARR]
+    mov edx,[edx]
+    push edx
+    call free
+    add esp,4
+        
+    mov edx,[STK_PTR_ARR]
+    mov edx,[edx+4]
+    push edx
+    call free
+    add esp,4
 
-    ;mov ebx, [CORS_PTR_ARR]  ; now ebx is the start of the co-pointers array
-    ;mov ebx,[ebx]            ; now ebx holds the start of the i-th co-routine
-    ;add ebx,4                ; now ebx hold the pointer to the co-routine stack
-    ;mov ebx,[ebx]
-    ;sub ebx,8
-    ;push ebx
-    ;call free
-    ;add esp,4
+    mov edx,[STK_PTR_ARR]
+    mov edx,[edx+8]
+    push edx
+    call free
+    add esp,4
 
+    mov ecx,0
+    .delete_stack:
+     mov edx,[STK_PTR_ARR]
+     mov edx,[edx+12+4*ecx]
+     pushad
+     push edx
+     call free
+     add esp,4
+     popad
+     add ecx,1
+     cmp ecx,[NUMCO]
+     jz .cont
+     jmp .delete_stack
+
+    .cont:
+    push dword [STK_PTR_ARR]
+    call free
+    add esp,4
+    
     push dword [DRONES_ARR]
     call free
     add esp,4

@@ -146,7 +146,6 @@ moveDrone:
     fld qword [ebx+16]     ; st0
     fcomi
     fstp st0
-    fstp st0
     jb .negative_angle
 
     jmp .alpha_updated
@@ -155,9 +154,8 @@ moveDrone:
     fild dword [angle_360]
     fld qword [ebx+16]
     fprem
-    fstp st0
-    fstp st0
     fstp qword [ebx+16]
+    fstp st0
 
     jmp .alpha_updated
 

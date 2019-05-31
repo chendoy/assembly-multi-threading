@@ -29,7 +29,7 @@ delta_alpha     resq 1           ; reserved for ∆α
 delta_distance  resq 1           ; reserved for ∆d
 delta_x         resq 1           ; reserved for ∆x
 delta_y         resq 1           ; reserved for ∆y
-degrees_180     resq 1           ; reserved for 180 degrees constant
+degrees_180     resd 1           ; reserved for 180 degrees constant
 alpha_rad       resq 1           ; reserved for α conversion to radians
 one_hundred     resd 1           ; reserved for 100 constant
 alphaMinusGamma resq 1            ; reserved for alpha - gamma
@@ -338,7 +338,7 @@ toRadians:
     fld qword [ebp+8]   ; load α
     fldpi               ; load pi
     fmulp
-    fild qword [degrees_180]
+    fild dword [degrees_180]
     fdivp
     fstp qword [alpha_rad]
 
@@ -357,63 +357,73 @@ mayDestroy:
 
  ;<< gamma = arctan2(y2-y1, x2-x1) >>
     
-    mov ebx,[drone_ptr]
-    fld qword [ebx+drone_Y_offset]                  ; ST(1) = Y1 (drone's Y)  
-    fld qword [TARGET_POS+target_Y_offset]          ; ST(0) = Y2 (Target Y)
+    mov ebx,  [drone_ptr]
+    fld qword [TARGET_POS+target_Y_offset]          ; ST(1) = Y2 (Target Y)
+    fld qword [ebx+drone_Y_offset]                  ; ST(0) = Y1 (drone's Y)  
     fsubp                                           ; ST(0) = Y2 - Y1
     fst qword [Y_differnce]                         ; Y_differnce = Y2 - Y1
 
     fld qword [TARGET_POS+target_X_offset]          ; ST(1) = X2 (Target X)
-    mov ebx,[drone_ptr]
+    mov ebx,  [drone_ptr]
     fld qword [ebx+drone_X_offset]                  ; ST(0) = X1 (drone's X)  
     fsubp                                           ; ST(0) = X2 - X1, ST(1) = Y2 - Y1
     fst qword [X_differnce]                         ; X_differnce = X2 - X1
     
-
     fpatan                                          ; ST(1) = Arctan(y2-y1,x2-x1) 
 
     ;converting the reuslt to degrees from radians ST(1)=pi
 
     fldpi                                           ; ST(0)= pi (for converting to degrees)
     fdivp                                           ; ST(0) = Arctan(y2-y1,x2-x1)\pi
-    fild qword [degrees_180]                        ; ST(1)= 180 deg
+    fild dword [degrees_180]                        ; ST(1)= 180 deg
     fmulp                                           ; ST(0)= Arctan(y2-y1,x2-x1)\pi *180 = ANGLE_GAMMA
     fst qword [angle_gamma]
 
     ;checking conditions 
     .check_1st_Cond: 
-                                                          ;abs(alpha-gamma) < beta) ?
-    mov ebx,[drone_ptr] 
-    fld qword [ebx+drone_Alpha_offset]                    ; ST(0)=Alpha
-    ;fld qword [angle_gamma]                              ; ST(0)=gamma
-    fsubp                                                 ; ST(0) = alpha-gamma
+                                                          ; abs(alpha-gamma) < beta) ?
+    mov ebx,   [drone_ptr] 
+    fld qword  [ebx+drone_Alpha_offset]                   ; ST(0) = alpha
+    ;fld qword [angle_gamma]                              ; ST(1) = gamma
+    fsubp                                                 ; ST(0) = gamma - alpha
+    fchs                                                  ; ST(0) = alpha - gamma
 
     ; cheching if (alpha-gamma) > π
     ; now ST(0) = (alpha-gamma) in degrees. will convert to radians first.
 
-    fstp qword [alphaMinusGamma]
-    
-    
+    .is_greater_pi:
 
-    fldpi                                                 ; ST(0) = π, ST(1) = alpha-gamma
-    fcomi st1                                             ; comparing (alpha-gamma) and π
-    ja .do_not_add_2pi
+    fstp qword [alphaMinusGamma]                          ; now FPU stack is empty
+    push dword [alphaMinusGamma+4]
+    push dword [alphaMinusGamma]
+    call toRadians
+    add esp,8
+    fld qword [alpha_rad]                                 ; is really alpha-gamma in rad, not alpha in rad
+    
+    fldpi                                                 ; ST(0) = π, ST(1) = (alpha-gamma) in rad
+    fcomi                                                 ; comparing (alpha-gamma)(in rad) and π
+    ja .do_not_add_2pi_but_pop_pi
 
     .add_2pi:
 
     fstp st0                                              
-    fstp st0               
+    fstp st0                                              ; pops π and (alpha-gamma) in rad    
+    mov ebx,  [drone_ptr]  
     fld qword [ebx+drone_Alpha_offset]                    ; ST(1) = alpha
     fld qword [angle_gamma]                               ; ST(0) = gamma
     fcomi
     jb .gamma_is_lower
+
     .alpha_is_lower:
 
-    fstp st0                                              ; pops gamma, now ST(0) = alpha
-    fldpi                                                 ; ST(0) = π, ST(1) = alpha 
-    faddp                                                 ; ST(0) = alpha + π
-    fldpi
-    faddp                                                 ; ST(0) = alpha + 2π
+    fstp st0
+    fstp st0                                              ; pops alpha and gamma
+    mov ebx,  [drone_ptr]  
+    fld qword [ebx+drone_Alpha_offset]
+    fild dword [degrees_180]                              ; ST(0) = 180, ST(1) = alpha 
+    faddp                                                 ; ST(0) = alpha + 180
+    fild dword [degrees_180]
+    faddp                                                 ; ST(0) = alpha + 360
     fstp qword [ebx+drone_Alpha_offset]                   ; updating drone's alpha
     jmp .continue
 
@@ -422,9 +432,9 @@ mayDestroy:
     fstp st0
     fstp st0                                              ; pops alpha and gamma
     fld qword [angle_gamma]                               
-    fldpi                                                 ; ST(0) = π, ST(1) = gamma 
+    fild dword [degrees_180]                               ; ST(0) = 180, ST(1) = gamma 
     faddp                                                 ; ST(0) = gamma + π
-    fldpi
+    fild dword [degrees_180]
     faddp                                                 ; ST(0) = gamma + 2π
     fstp qword [angle_gamma]                              ; updating drone's gamma
 
@@ -432,17 +442,28 @@ mayDestroy:
     fstp st0
     fstp st0
     mov ebx,  [drone_ptr] 
-    fld qword [ebx+drone_Alpha_offset]                    ; ST(0)=Alpha
-    fld qword [angle_gamma]                               ; ST(0)=gamma
+    fld qword [ebx+drone_Alpha_offset]                    ; ST(1) = alpha
+    fld qword [angle_gamma]                               ; ST(0) = gamma
     fsubp                                                 ; ST(0) = alpha-gamma
+    jmp .do_not_add_2pi
 
-    .do_not_add_2pi:
+    .do_not_add_2pi_but_pop_pi:
+    fstp st0                                             ; pops the pi
+    
+    ; now ST(0) is (alpha-gamma) in rad. will convert back to degrees.
+
+    fldpi                                           ; ST(0) = pi (for converting to degrees)
+    fdivp                                           ; ST(0) = (alpha-gamma)/pi
+    fild dword [degrees_180]                        ; ST(1) = 180 deg
+    fmulp                                           ; ST(0) = (alpha-gamma)\pi *180 = (alpha-gamma) in degrees
+
+    .do_not_add_2pi:                                        
     fabs                                                  ; ST(1) = ABS(alpha-gamma)
     fld qword [BETA]                                      ; ST(0) = BETA 
     fcomip                                                ; comapring 
     ja .check_2nd_Cond
 
-    ;free stack
+    ; free stack
     FSTP ST0
     FSTP ST0
     FSTP ST0

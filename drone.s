@@ -22,16 +22,17 @@ target_X_offset equ 0
 target_Y_offset equ 8
 extern currentDrone_index
 DRONE_STRUC_SIZE equ 28
-curr_alpha     resq 1
-drone_ptr      resd 1
-angle_360      resd 1
-delta_alpha    resq 1           ; reserved for ∆α
-delta_distance resq 1           ; reserved for ∆d
-delta_x        resq 1           ; reserved for ∆x
-delta_y        resq 1           ; reserved for ∆y
-degrees_180    resq 1           ; reserved for 180 degrees constant
-alpha_rad      resq 1           ; reserved for α conversion to radians
-one_hundred    resd 1           ; reserved for 100 constant
+curr_alpha      resq 1
+drone_ptr       resd 1
+angle_360       resd 1
+delta_alpha     resq 1           ; reserved for ∆α
+delta_distance  resq 1           ; reserved for ∆d
+delta_x         resq 1           ; reserved for ∆x
+delta_y         resq 1           ; reserved for ∆y
+degrees_180     resq 1           ; reserved for 180 degrees constant
+alpha_rad       resq 1           ; reserved for α conversion to radians
+one_hundred     resd 1           ; reserved for 100 constant
+alphaMinusGamma resq 1            ; reserved for alpha - gamma
 extern TARGET_POS ; (X2,Y2)
 angle_gamma resq 1
 Y_differnce resq 1
@@ -348,45 +349,99 @@ toRadians:
 
 mayDestroy:
     finit
-    push ebp                  
+    push ebp
     mov ebp,esp
-    sub esp,4 ; [ebp-4]=0 => can't destory , [ebp-4]=1 => can destroy
+    sub esp,4                           ; [ebp-4] = 0 => can't destory , [ebp-4]=1 => can destroy
     pushad
     mov dword[ebp-4],0 ;  default = can't destroy
 
  ;<< gamma = arctan2(y2-y1, x2-x1) >>
     
     mov ebx,[drone_ptr]
-    fld qword [ebx+drone_Y_offset]                  ; ST(1)=Y1 (drone's Y)  
-    fld qword [TARGET_POS+target_Y_offset]          ; ST(0)=Y2 (Target Y)
-    fsubp                                           ; ST(0)=Y2-Y1
-    fst qword [Y_differnce]                         ; Y_differnce= Y2-Y1
+    fld qword [ebx+drone_Y_offset]                  ; ST(1) = Y1 (drone's Y)  
+    fld qword [TARGET_POS+target_Y_offset]          ; ST(0) = Y2 (Target Y)
+    fsubp                                           ; ST(0) = Y2 - Y1
+    fst qword [Y_differnce]                         ; Y_differnce = Y2 - Y1
 
-    fld qword [TARGET_POS+target_X_offset]          ; ST(1)=X2 (Target X)
+    fld qword [TARGET_POS+target_X_offset]          ; ST(1) = X2 (Target X)
     mov ebx,[drone_ptr]
-    fld qword [ebx+drone_X_offset]                  ; ST(0)=X1 (drone's X)  
-    fsubp                                           ; ST(0)=X2-X1, ST(1)=Y2-Y1
-    fst qword [X_differnce]                         ; X_differnce= X2-X1
+    fld qword [ebx+drone_X_offset]                  ; ST(0) = X1 (drone's X)  
+    fsubp                                           ; ST(0) = X2 - X1, ST(1) = Y2 - Y1
+    fst qword [X_differnce]                         ; X_differnce = X2 - X1
     
 
-    fpatan ; ST(1)=Arctan(y2-y1,x2-x1) 
+    fpatan                                          ; ST(1) = Arctan(y2-y1,x2-x1) 
+
     ;converting the reuslt to degrees from radians ST(1)=pi
-    fldpi  ; ST(0)= pi (for converting to degrees)
-    fdivp ; ST(0) = Arctan(y2-y1,x2-x1)\pi
-    fild qword [degrees_180] ; ST(1)= 180 deg
-    fmulp ;ST(0)= Arctan(y2-y1,x2-x1)\pi *180 = ANGLE_GAMMA
+
+    fldpi                                           ; ST(0)= pi (for converting to degrees)
+    fdivp                                           ; ST(0) = Arctan(y2-y1,x2-x1)\pi
+    fild qword [degrees_180]                        ; ST(1)= 180 deg
+    fmulp                                           ; ST(0)= Arctan(y2-y1,x2-x1)\pi *180 = ANGLE_GAMMA
     fst qword [angle_gamma]
 
     ;checking conditions 
-    .check_1st_Cond:                                      ;abs(alpha-gamma) < beta) ?
+    .check_1st_Cond: 
+                                                          ;abs(alpha-gamma) < beta) ?
     mov ebx,[drone_ptr] 
     fld qword [ebx+drone_Alpha_offset]                    ; ST(0)=Alpha
     ;fld qword [angle_gamma]                              ; ST(0)=gamma
     fsubp                                                 ; ST(0) = alpha-gamma
+
+    ; cheching if (alpha-gamma) > π
+    ; now ST(0) = (alpha-gamma) in degrees. will convert to radians first.
+
+    fstp qword [alphaMinusGamma]
+    
+    
+
+    fldpi                                                 ; ST(0) = π, ST(1) = alpha-gamma
+    fcomi st1                                             ; comparing (alpha-gamma) and π
+    ja .do_not_add_2pi
+
+    .add_2pi:
+
+    fstp st0                                              
+    fstp st0               
+    fld qword [ebx+drone_Alpha_offset]                    ; ST(1) = alpha
+    fld qword [angle_gamma]                               ; ST(0) = gamma
+    fcomi
+    jb .gamma_is_lower
+    .alpha_is_lower:
+
+    fstp st0                                              ; pops gamma, now ST(0) = alpha
+    fldpi                                                 ; ST(0) = π, ST(1) = alpha 
+    faddp                                                 ; ST(0) = alpha + π
+    fldpi
+    faddp                                                 ; ST(0) = alpha + 2π
+    fstp qword [ebx+drone_Alpha_offset]                   ; updating drone's alpha
+    jmp .continue
+
+    .gamma_is_lower:
+
+    fstp st0
+    fstp st0                                              ; pops alpha and gamma
+    fld qword [angle_gamma]                               
+    fldpi                                                 ; ST(0) = π, ST(1) = gamma 
+    faddp                                                 ; ST(0) = gamma + π
+    fldpi
+    faddp                                                 ; ST(0) = gamma + 2π
+    fstp qword [angle_gamma]                              ; updating drone's gamma
+
+    .continue:
+    fstp st0
+    fstp st0
+    mov ebx,  [drone_ptr] 
+    fld qword [ebx+drone_Alpha_offset]                    ; ST(0)=Alpha
+    fld qword [angle_gamma]                               ; ST(0)=gamma
+    fsubp                                                 ; ST(0) = alpha-gamma
+
+    .do_not_add_2pi:
     fabs                                                  ; ST(1) = ABS(alpha-gamma)
-    fild qword[BETA]                                      ; ST(0) = BETA 
+    fld qword [BETA]                                      ; ST(0) = BETA 
     fcomip                                                ; comapring 
     ja .check_2nd_Cond
+
     ;free stack
     FSTP ST0
     FSTP ST0
@@ -404,8 +459,8 @@ mayDestroy:
      FMULP                      ; ST(0)=(X2-X1)^2
      faddP                      ; ST(0)=(Y2-Y1)^2 + (X2-X1)^2
 
-     fsqrt ; ST(1)= SQRT ((Y2-Y1)^2 + (X2-X1)^2)
-     fild qword [DISTANCE]      ; ST(0)= d
+     fsqrt                      ; ST(1)= SQRT ((Y2-Y1)^2 + (X2-X1)^2)
+     fld qword [DISTANCE]      ; ST(0)= d
      fcomip 
      ja .can_destory            ; if both conditions implmented, then can destory target
      jmp .end_function

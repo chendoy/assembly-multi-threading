@@ -68,7 +68,7 @@ DISTANCE     resq 1            ; d - visibility distance of a drone
 SEED         resw 1            ; seed - LFSR's seed
 curr_LFSR    resw 1            ; current LFSR's read
 offset       resd 1            ;
-
+neg_flag     resd 1            ; tells whether the generated random was negative or not
 
 section .data
 
@@ -283,11 +283,13 @@ generateScaled:
     mov edi, [ebp+12] ; B
 
     call generateRandom
-    mov ebx, eax      ; ebx = x (generated random)
+    mov ebx, eax              ; ebx = x (generated random)
     cmp ebx,0
-    jg .do_not_neg
+    jg .do_not_set_flag
+    .set_neg_flag:
+    mov dword [neg_flag], 1   ; turns on the negative random flag. used to make safe signed addition
     neg ebx
-    .do_not_neg:
+    .do_not_set_flag:
     sub edi,esi       ; edi = B - A
     mov [ebp-4], edi  ; [ebp-4] = B - A
     fild dword [ebp-4]
@@ -296,6 +298,11 @@ generateScaled:
     fidiv dword [MAX_INT_16]
     mov [ebp-4], esi
     fiadd dword [ebp-4]
+    cmp dword [neg_flag],0
+    je .do_not_change_sign
+    fchs                             ; change sign
+    mov dword [neg_flag], 0          ; inits the neg flag for next time
+    .do_not_change_sign:
     fstp qword [randomized]          ; eax = fp of ((B-A)*x)/0xffff)
 
     popad
